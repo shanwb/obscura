@@ -1971,11 +1971,13 @@ impl TextEngine {
         }
         let min_content_query =
             known.width.is_none() && matches!(available.width, taffy::AvailableSpace::MinContent);
-        let width = known.width.or(match available.width {
-            taffy::AvailableSpace::Definite(width) => Some(width),
-            taffy::AvailableSpace::MinContent => Some(0.0),
-            taffy::AvailableSpace::MaxContent => None,
-        });
+        // Taffy resolves a definite available width to the content box; known.width
+        // can still include the flex item's padding and border.
+        let width = match available.width {
+            taffy::AvailableSpace::Definite(width) => Some(width.max(0.0)),
+            taffy::AvailableSpace::MinContent => known.width.or(Some(0.0)),
+            taffy::AvailableSpace::MaxContent => known.width,
+        };
         let wrap = if min_content_query {
             self.items[idx].min_content_wrap
         } else {

@@ -5075,3 +5075,19 @@ fn float_ending_at_rounded_segment_boundary_does_not_panic() {
 
     assert_eq!(place(&mut context, 400.3333, FloatDirection::Left).y, 1859.0);
 }
+
+#[cfg(feature = "paint")]
+#[test]
+fn padded_flex_item_wraps_text_at_its_content_width() {
+    let tree = parse_html(r#"<style>
+        section {display:flex; align-items:center;}
+        .item {width:32px; font:18px/24px sans-serif;}
+        #padded {padding:10px;}
+        </style>
+        <section><div class="item" id="plain">本次申请<br><strong>20 万元</strong></div></section>
+        <section><div class="item" id="padded">本次申请<br><strong>20 万元</strong></div></section>"#);
+    let layout = layout_dom(&tree, (375.0, 400.0));
+    let rect = |id| layout.rects[&tree.get_element_by_id(id).unwrap()];
+    assert_eq!(rect("padded").width, rect("plain").width + 20.0);
+    assert_eq!(rect("padded").height, rect("plain").height + 20.0);
+}
