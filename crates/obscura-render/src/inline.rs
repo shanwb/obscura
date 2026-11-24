@@ -722,6 +722,7 @@ fn metadata_variation(metadata: usize) -> Option<usize> {
 /// paint it (filled in after layout).
 pub struct InlineItem {
     buffer: Buffer,
+    is_flex_item: bool,
     /// Wrapping used for definite-width layout and final paint.
     layout_wrap: Wrap,
     /// Wrapping used only for an intrinsic min-content query. This differs
@@ -1423,7 +1424,7 @@ impl TextEngine {
             &mut collector,
             &self.loaded_families,
         );
-        self.push_shaped_item(
+        let item = self.push_shaped_item(
             base,
             line_height,
             spans,
@@ -1431,7 +1432,13 @@ impl TextEngine {
             collector.owner_ranges,
             collector.owner_boxes,
             collector.boundary_events,
-        )
+        )?;
+        let parent = std::iter::successors(crate::dom::rendered_parent(tree, id), |parent| {
+            crate::dom::rendered_parent(tree, *parent)
+        }).filter_map(|id| styles.get(&id)).find(|style| !style.display_contents);
+        self.items[item].is_flex_item = base.position != Some(taffy::Position::Absolute)
+            && parent.is_some_and(|p| p.display == Display::Flex && !p.internal_flex_container);
+        Some(item)
     }
 
     /// Build an inline formatting context from a *run* of consecutive
@@ -1796,6 +1803,7 @@ impl TextEngine {
         .then(|| buffer.clone());
         self.items.push(InlineItem {
             buffer,
+            is_flex_item: false,
             layout_wrap,
             min_content_wrap,
             source_buffer,
@@ -1974,7 +1982,8 @@ impl TextEngine {
         // Taffy resolves a definite available width to the content box; known.width
         // can still include the flex item's padding and border.
         let width = match available.width {
-            taffy::AvailableSpace::Definite(width) => Some(width.max(0.0)),
+            taffy::AvailableSpace::Definite(width) if self.items[idx].is_flex_item => Some(width.max(0.0)),
+            taffy::AvailableSpace::Definite(width) => known.width.or(Some(width)),
             taffy::AvailableSpace::MinContent => known.width.or(Some(0.0)),
             taffy::AvailableSpace::MaxContent => known.width,
         };
